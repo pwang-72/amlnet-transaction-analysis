@@ -1,0 +1,684 @@
+{
+  "$schema": "https://vega.github.io/schema/vega/v5.json",
+  "description": "AMLNet one-hop transaction network: interleaved weighted angular spacing, bottom-left legend",
+  "autosize": "none",
+  "padding": {
+    "left": 12,
+    "right": 12,
+    "top": 14,
+    "bottom": 12
+  },
+  "data": [
+    {
+      "name": "dataset"
+    },
+    {
+      "name": "normalized",
+      "source": "dataset",
+      "transform": [
+        {
+          "type": "filter",
+          "expr": "isValid(datum.source_id) && isValid(datum.target_id)"
+        },
+        {
+          "type": "filter",
+          "expr": "focusAccount !== '' && (toString(datum.source_id) === focusAccount || toString(datum.target_id) === focusAccount)"
+        },
+        {
+          "type": "formula",
+          "as": "source",
+          "expr": "toString(datum.source_id)"
+        },
+        {
+          "type": "formula",
+          "as": "target",
+          "expr": "toString(datum.target_id)"
+        },
+        {
+          "type": "formula",
+          "as": "flag_value",
+          "expr": "datum.flagged === true || datum.flagged === 1 || datum.flagged === 'True' || datum.flagged === 'TRUE' || datum.flagged === 'true' ? 1 : 0"
+        },
+        {
+          "type": "formula",
+          "as": "amount_value",
+          "expr": "isValid(datum['Sum of total_amount']) ? max(0, toNumber(datum['Sum of total_amount'])) : 0"
+        }
+      ]
+    },
+    {
+      "name": "links",
+      "source": "normalized",
+      "transform": [
+        {
+          "type": "aggregate",
+          "groupby": [
+            "source",
+            "target",
+            "flag_value"
+          ],
+          "fields": [
+            "amount_value",
+            "amount_value"
+          ],
+          "ops": [
+            "sum",
+            "count"
+          ],
+          "as": [
+            "edge_amount",
+            "source_rows"
+          ]
+        },
+        {
+          "type": "formula",
+          "as": "source_account",
+          "expr": "datum.source"
+        },
+        {
+          "type": "formula",
+          "as": "target_account",
+          "expr": "datum.target"
+        },
+        {
+          "type": "formula",
+          "as": "status",
+          "expr": "datum.flag_value > 0 ? 'Flagged transactions' : 'Unflagged transactions'"
+        },
+        {
+          "type": "formula",
+          "as": "has_flagged",
+          "expr": "datum.flag_value"
+        },
+        {
+          "type": "formula",
+          "as": "pair_key",
+          "expr": "datum.source_account < datum.target_account ? datum.source_account + '|' + datum.target_account : datum.target_account + '|' + datum.source_account"
+        },
+        {
+          "type": "formula",
+          "as": "curve_coef",
+          "expr": "datum.flag_value > 0 ? 0.26 * curveStrength : 0.14 * curveStrength"
+        },
+        {
+          "type": "formula",
+          "as": "counterparty_id",
+          "expr": "datum.source_account === focusAccount ? datum.target_account : datum.source_account"
+        },
+        {
+          "type": "joinaggregate",
+          "groupby": [
+            "counterparty_id"
+          ],
+          "fields": [
+            "edge_amount"
+          ],
+          "ops": [
+            "count"
+          ],
+          "as": [
+            "counterparty_link_count"
+          ]
+        },
+        {
+          "type": "formula",
+          "as": "layout_link_strength",
+          "expr": "0.65 / max(1, datum.counterparty_link_count)"
+        },
+        {
+          "type": "formula",
+          "as": "link_distance",
+          "expr": "135 + 14 * ((parseInt(substring(datum.source_account, 1)) + parseInt(substring(datum.target_account, 1))) % 7)"
+        }
+      ]
+    },
+    {
+      "name": "endpoints",
+      "source": "links",
+      "transform": [
+        {
+          "type": "fold",
+          "fields": [
+            "source_account",
+            "target_account"
+          ],
+          "as": [
+            "role",
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nodes",
+      "source": "endpoints",
+      "transform": [
+        {
+          "type": "aggregate",
+          "groupby": [
+            "id"
+          ],
+          "fields": [
+            "edge_amount",
+            "edge_amount"
+          ],
+          "ops": [
+            "sum",
+            "count"
+          ],
+          "as": [
+            "total_amount",
+            "connections"
+          ]
+        },
+        {
+          "type": "formula",
+          "as": "angular_weight",
+          "expr": "datum.id === focusAccount ? 0 : 1 + 1.2 * min(2, max(0, datum.connections - 1))"
+        },
+        {
+          "type": "formula",
+          "as": "angle_group",
+          "expr": "datum.id === focusAccount ? -1 : (datum.connections > 1 ? 1 : 0)"
+        },
+        {
+          "type": "window",
+          "groupby": [
+            "angle_group"
+          ],
+          "sort": {
+            "field": "id",
+            "order": "ascending"
+          },
+          "ops": [
+            "row_number"
+          ],
+          "fields": [
+            null
+          ],
+          "as": [
+            "group_rank"
+          ]
+        },
+        {
+          "type": "joinaggregate",
+          "groupby": [
+            "angle_group"
+          ],
+          "fields": [
+            "id"
+          ],
+          "ops": [
+            "count"
+          ],
+          "as": [
+            "group_count"
+          ]
+        },
+        {
+          "type": "formula",
+          "as": "angular_slot",
+          "expr": "datum.angle_group === -1 ? -1 : (datum.group_rank - (datum.angle_group === 1 ? 0.5 : 0.2)) / max(1, datum.group_count)"
+        },
+        {
+          "type": "window",
+          "sort": {
+            "field": [
+              "angular_slot",
+              "id"
+            ],
+            "order": [
+              "ascending",
+              "ascending"
+            ]
+          },
+          "ops": [
+            "sum"
+          ],
+          "fields": [
+            "angular_weight"
+          ],
+          "as": [
+            "angular_running"
+          ],
+          "frame": [
+            null,
+            0
+          ],
+          "ignorePeers": true
+        },
+        {
+          "type": "joinaggregate",
+          "ops": [
+            "sum"
+          ],
+          "fields": [
+            "angular_weight"
+          ],
+          "as": [
+            "angular_total"
+          ]
+        },
+        {
+          "type": "formula",
+          "as": "preferred_angle",
+          "expr": "datum.id === focusAccount ? 0 : 2 * PI * (datum.angular_running - datum.angular_weight / 2) / max(1, datum.angular_total) - PI / 2"
+        },
+        {
+          "type": "formula",
+          "as": "preferred_x",
+          "expr": "datum.id === focusAccount ? width / 2 : width / 2 + min(160, min(width, height) * 0.35) * cos(datum.preferred_angle)"
+        },
+        {
+          "type": "formula",
+          "as": "preferred_y",
+          "expr": "datum.id === focusAccount ? height / 2 : height / 2 + min(160, min(width, height) * 0.35) * sin(datum.preferred_angle)"
+        }
+      ]
+    }
+  ],
+  "marks": [
+    {
+      "name": "node_marks",
+      "type": "symbol",
+      "zindex": 2,
+      "from": {
+        "data": "nodes"
+      },
+      "encode": {
+        "enter": {
+          "fill": {
+            "value": "#4F81A8"
+          },
+          "stroke": {
+            "value": "#1F4E79"
+          },
+          "strokeWidth": {
+            "value": 2
+          }
+        },
+        "update": {
+          "size": {
+            "scale": "nodeArea",
+            "field": "total_amount"
+          },
+          "tooltip": {
+            "signal": "{'Account ID': datum.id, 'Total incoming + outgoing amount': format(datum.total_amount, ',.2f'), 'Displayed directed links': datum.connections}"
+          }
+        }
+      },
+      "transform": [
+        {
+          "type": "force",
+          "static": true,
+          "iterations": 550,
+          "signal": "force",
+          "forces": [
+            {
+              "force": "center",
+              "x": {
+                "signal": "width / 2"
+              },
+              "y": {
+                "signal": "height / 2"
+              }
+            },
+            {
+              "force": "nbody",
+              "strength": -105
+            },
+            {
+              "force": "collide",
+              "radius": {
+                "expr": "sqrt(datum.size / PI) + 12"
+              },
+              "strength": 0.9,
+              "iterations": 2
+            },
+            {
+              "force": "x",
+              "x": "datum.preferred_x",
+              "strength": 0.5
+            },
+            {
+              "force": "y",
+              "y": "datum.preferred_y",
+              "strength": 0.5
+            },
+            {
+              "force": "link",
+              "links": "links",
+              "id": "datum.id",
+              "distance": {
+                "field": "link_distance"
+              },
+              "strength": {
+                "field": "layout_link_strength"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "edges",
+      "type": "path",
+      "zindex": 0,
+      "from": {
+        "data": "links"
+      },
+      "encode": {
+        "update": {
+          "stroke": {
+            "scale": "edgeColor",
+            "field": "status"
+          },
+          "strokeWidth": {
+            "scale": "edgeWidth",
+            "field": "edge_amount"
+          },
+          "strokeCap": {
+            "value": "round"
+          },
+          "opacity": {
+            "value": 0.89
+          },
+          "fill": {
+            "value": null
+          },
+          "path": {
+            "signal": "'M' + datum.source.x + ',' + datum.source.y + ' Q' + ((datum.source.x + datum.target.x) / 2 + datum.curve_coef * (datum.target.y - datum.source.y)) + ',' + ((datum.source.y + datum.target.y) / 2 - datum.curve_coef * (datum.target.x - datum.source.x)) + ' ' + datum.target.x + ',' + datum.target.y"
+          },
+          "tooltip": {
+            "signal": "{'Source': datum.source_account, 'Target': datum.target_account, 'Transaction status': datum.status, 'Total amount': format(datum.edge_amount, ',.2f')}"
+          }
+        }
+      }
+    },
+    {
+      "name": "arrowheads",
+      "type": "symbol",
+      "zindex": 1,
+      "interactive": false,
+      "from": {
+        "data": "links"
+      },
+      "encode": {
+        "update": {
+          "x": {
+            "signal": "datum.target.x - (clamp((sqrt(datum.target.size / PI) + .1 + scale('edgeWidth', datum.edge_amount)) / max(1, hypot((datum.target.x - datum.source.x), (datum.target.y - datum.source.y))), 0.04, 0.42)) * (datum.target.x - datum.source.x) + 2 * datum.curve_coef * (clamp((sqrt(datum.target.size / PI) + .1 + scale('edgeWidth', datum.edge_amount)) / max(1, hypot((datum.target.x - datum.source.x), (datum.target.y - datum.source.y))), 0.04, 0.42)) * (1 - (clamp((sqrt(datum.target.size / PI) + .1 + scale('edgeWidth', datum.edge_amount)) / max(1, hypot((datum.target.x - datum.source.x), (datum.target.y - datum.source.y))), 0.04, 0.42))) * (datum.target.y - datum.source.y)"
+          },
+          "y": {
+            "signal": "datum.target.y - (clamp((sqrt(datum.target.size / PI) + .1 + scale('edgeWidth', datum.edge_amount)) / max(1, hypot((datum.target.x - datum.source.x), (datum.target.y - datum.source.y))), 0.04, 0.42)) * (datum.target.y - datum.source.y) - 2 * datum.curve_coef * (clamp((sqrt(datum.target.size / PI) + .1 + scale('edgeWidth', datum.edge_amount)) / max(1, hypot((datum.target.x - datum.source.x), (datum.target.y - datum.source.y))), 0.04, 0.42)) * (1 - (clamp((sqrt(datum.target.size / PI) + .1 + scale('edgeWidth', datum.edge_amount)) / max(1, hypot((datum.target.x - datum.source.x), (datum.target.y - datum.source.y))), 0.04, 0.42))) * (datum.target.x - datum.source.x)"
+          },
+          "shape": {
+            "value": "triangle-up"
+          },
+          "size": {
+            "signal": "min(220, max(35, 26 * pow(scale('edgeWidth', datum.edge_amount), 1.22)))"
+          },
+          "angle": {
+            "signal": "atan2((datum.target.y - datum.source.y) + 2 * datum.curve_coef * (1 - 2 * (clamp((sqrt(datum.target.size / PI) + .1 + scale('edgeWidth', datum.edge_amount)) / max(1, hypot((datum.target.x - datum.source.x), (datum.target.y - datum.source.y))), 0.04, 0.42))) * (datum.target.x - datum.source.x), (datum.target.x - datum.source.x) - 2 * datum.curve_coef * (1 - 2 * (clamp((sqrt(datum.target.size / PI) + .1 + scale('edgeWidth', datum.edge_amount)) / max(1, hypot((datum.target.x - datum.source.x), (datum.target.y - datum.source.y))), 0.04, 0.42))) * (datum.target.y - datum.source.y)) * 180 / PI + 90"
+          },
+          "fill": {
+            "scale": "edgeColor",
+            "field": "status"
+          },
+          "opacity": {
+            "value": 0.98
+          }
+        }
+      }
+    },
+    {
+      "name": "focus_ring",
+      "type": "symbol",
+      "zindex": 1.8,
+      "interactive": false,
+      "from": {
+        "data": "node_marks"
+      },
+      "encode": {
+        "enter": {
+          "shape": {
+            "value": "circle"
+          },
+          "fill": {
+            "value": null
+          },
+          "stroke": {
+            "value": "#C75B56"
+          },
+          "strokeWidth": {
+            "value": 2
+          },
+          "strokeDash": {
+            "value": [
+              5,
+              4
+            ]
+          }
+        },
+        "update": {
+          "x": {
+            "field": "x"
+          },
+          "y": {
+            "field": "y"
+          },
+          "size": {
+            "signal": "PI * pow(sqrt(datum.size / PI) + 9, 2)"
+          },
+          "opacity": {
+            "signal": "datum.datum.id === focusAccount ? 0.95 : 0"
+          }
+        }
+      }
+    },
+    {
+      "name": "focus_label_box",
+      "type": "rect",
+      "zindex": 2.6,
+      "interactive": false,
+      "from": {
+        "data": "node_marks"
+      },
+      "encode": {
+        "enter": {
+          "fill": {
+            "value": "#F5F7FA"
+          },
+          "stroke": {
+            "value": "#D9E1E8"
+          },
+          "strokeWidth": {
+            "value": 1
+          }
+        },
+        "update": {
+          "x": {
+            "signal": "datum.x - max(62, length(toString(datum.datum.id)) * 8 + 20) / 2"
+          },
+          "x2": {
+            "signal": "datum.x + max(62, length(toString(datum.datum.id)) * 8 + 20) / 2"
+          },
+          "y": {
+            "signal": "datum.y + sqrt(datum.size / PI) + 10"
+          },
+          "y2": {
+            "signal": "datum.y + sqrt(datum.size / PI) + 32"
+          },
+          "opacity": {
+            "signal": "datum.datum.id === focusAccount ? 0.96 : 0"
+          }
+        }
+      }
+    },
+    {
+      "name": "focus_label_text",
+      "type": "text",
+      "zindex": 3.1,
+      "interactive": false,
+      "from": {
+        "data": "node_marks"
+      },
+      "encode": {
+        "enter": {
+          "font": {
+            "value": "Segoe UI"
+          },
+          "fontSize": {
+            "value": 11
+          },
+          "fontWeight": {
+            "value": 700
+          },
+          "fill": {
+            "value": "#273445"
+          },
+          "text": {
+            "field": "datum.id"
+          }
+        },
+        "update": {
+          "x": {
+            "field": "x"
+          },
+          "y": {
+            "signal": "datum.y + sqrt(datum.size / PI) + 21"
+          },
+          "align": {
+            "value": "center"
+          },
+          "baseline": {
+            "value": "middle"
+          },
+          "opacity": {
+            "signal": "datum.datum.id === focusAccount ? 1 : 0"
+          }
+        }
+      }
+    },
+    {
+      "name": "node_labels",
+      "type": "text",
+      "zindex": 3,
+      "from": {
+        "data": "node_marks"
+      },
+      "interactive": false,
+      "encode": {
+        "enter": {
+          "text": {
+            "field": "datum.id"
+          },
+          "font": {
+            "value": "Segoe UI"
+          },
+          "fontSize": {
+            "value": 10.5
+          },
+          "fontWeight": {
+            "value": 600
+          },
+          "fill": {
+            "value": "#273445"
+          }
+        },
+        "update": {
+          "x": {
+            "signal": "datum.x + (datum.x < width / 2 ? -1 : 1) * (sqrt(datum.size / PI) + 10)"
+          },
+          "y": {
+            "field": "y"
+          },
+          "align": {
+            "signal": "datum.x < width / 2 ? 'right' : 'left'"
+          },
+          "baseline": {
+            "value": "middle"
+          },
+          "opacity": {
+            "signal": "datum.datum.id === focusAccount ? 0 : 1"
+          }
+        }
+      }
+    }
+  ],
+  "background": "#FFFFFF",
+  "signals": [
+    {
+      "name": "focusAccount",
+      "value": "C4239"
+    },
+    {
+      "name": "curveStrength",
+      "value": 1.0
+    }
+  ],
+  "scales": [
+    {
+      "name": "edgeColor",
+      "type": "ordinal",
+      "domain": [
+        "Unflagged transactions",
+        "Flagged transactions"
+      ],
+      "range": [
+        "#AFC6D9",
+        "#C75B56"
+      ]
+    },
+    {
+      "name": "edgeWidth",
+      "type": "sqrt",
+      "domain": {
+        "data": "links",
+        "field": "edge_amount"
+      },
+      "range": [
+        1.4,
+        9.0
+      ],
+      "zero": false,
+      "clamp": true
+    },
+    {
+      "name": "nodeArea",
+      "type": "sqrt",
+      "domain": {
+        "data": "nodes",
+        "field": "total_amount"
+      },
+      "range": [
+        220,
+        2000
+      ],
+      "zero": false,
+      "clamp": true
+    }
+  ],
+  "legends": [
+    {
+      "stroke": "edgeColor",
+      "title": "Transaction status",
+      "orient": "bottom-left",
+      "direction": "horizontal",
+      "symbolType": "stroke",
+      "symbolSize": 240,
+      "symbolStrokeWidth": 4,
+      "labelFont": "Segoe UI",
+      "labelFontSize": 11,
+      "labelColor": "#526172",
+      "titleFont": "Segoe UI",
+      "titleFontSize": 11,
+      "titleFontWeight": "bold",
+      "titleColor": "#273445",
+      "padding": 7,
+      "rowPadding": 7,
+      "columnPadding": 20,
+      "offset": 12,
+      "zindex": 10
+    }
+  ]
+}

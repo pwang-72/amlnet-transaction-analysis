@@ -1,0 +1,207 @@
+{
+  "$schema": "https://vega.github.io/schema/vega/v5.json",
+  "description": "AMLNet first-degree transaction network",
+  "autosize": "none",
+  "padding": 10,
+
+  "data": [
+    {"name": "dataset"},
+    {
+      "name": "normalized",
+      "source": "dataset",
+      "transform": [
+        {
+          "type": "filter",
+          "expr": "toString(datum.source_id) === 'C4239' || toString(datum.target_id) === 'C4239'"
+        },
+        {
+          "type": "formula",
+          "as": "source",
+          "expr": "toString(datum.source_id)"
+        },
+        {
+          "type": "formula",
+          "as": "target",
+          "expr": "toString(datum.target_id)"
+        },
+        {
+          "type": "formula",
+          "as": "flag_value",
+          "expr": "datum.flagged === true || datum.flagged === 1 || datum.flagged === 'True' || datum.flagged === 'TRUE' ? 1 : 0"
+        }
+      ]
+    },
+    {
+      "name": "links",
+      "source": "normalized",
+      "transform": [
+        {
+          "type": "aggregate",
+          "groupby": ["source", "target"],
+          "fields": ["flag_value", "Sum of total_amount"],
+          "ops": ["max", "sum"],
+          "as": ["has_flagged", "edge_amount"]
+        },        
+        {
+          "type": "formula",
+          "as": "source_account",
+          "expr": "datum.source"
+        },
+        {
+          "type": "formula",
+          "as": "target_account",
+          "expr": "datum.target"
+        },
+        {
+          "type": "formula",
+          "as": "pair_key",
+          "expr": "datum.source < datum.target ? datum.source + '|' + datum.target : datum.target + '|' + datum.source"
+        },
+        {
+          "type": "formula",
+          "as": "curve_dir",
+          "expr": "datum.source < datum.target ? 1 : -1"
+        },
+        {
+          "type": "formula",
+          "as": "edge_width",
+          "expr": "min(6, 1 + 3 * sqrt(max(0, datum.edge_amount) / 100000))"
+        },
+        {
+          "type": "formula",
+          "as": "link_distance",
+          "expr": "85 + 12 * ((parseInt(substring(datum.source_account, 1)) + parseInt(substring(datum.target_account, 1))) % 6)"
+        }
+      ]
+    },
+    {
+      "name": "endpoints",
+      "source": "links",
+      "transform": [
+        {
+          "type": "fold",
+          "fields": ["source", "target"],
+          "as": ["role", "id"]
+        }
+      ]
+    },
+    {
+      "name": "nodes",
+      "source": "endpoints",
+      "transform": [
+        {
+          "type": "aggregate",
+          "groupby": ["id"],
+          "fields": ["id", "has_flagged"],
+          "ops": ["count", "max"],
+          "as": ["connections", "has_flagged"]
+        }
+      ]
+    }
+  ],
+
+  "marks": [
+    {
+      "name": "node_marks",
+      "type": "symbol",
+      "zindex": 1,
+      "from": {"data": "nodes"},
+      "encode": {
+        "enter": {
+          "stroke": {"value": "#FFFFFF"},
+          "strokeWidth": {"value": 1.5}
+        },
+        "update": {
+          "size": {
+            "signal": "130 + 55 * sqrt(datum.connections)"
+          },
+          "fill": {
+            "signal": "datum.has_flagged > 0 ? '#D65A55' : '#A9B7C7'"
+          },
+          "tooltip": {
+            "signal": "{'Account': datum.id, 'Connections': datum.connections, 'Has flagged link': datum.has_flagged > 0 ? 'Yes' : 'No'}"
+          }
+        }
+      },
+      "transform": [
+        {
+          "type": "force",
+          "static": true,
+          "iterations": 250,
+          "signal": "force",
+          "forces": [
+            {
+              "force": "center",
+              "x": {"signal": "width / 2"},
+              "y": {"signal": "height / 2"}
+            },
+            {
+              "force": "nbody",
+              "strength": -70
+            },
+            {
+              "force": "collide",
+              "radius": 12
+            },
+            {
+              "force": "link",
+              "links": "links",
+              "id": "datum.id",
+              "distance": {"field": "link_distance"}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "edges",
+      "type": "path",
+      "zindex": 0,
+      "from": {"data": "links"},
+      "encode": {
+        "update": {
+          "stroke": {
+            "signal": "datum.has_flagged > 0 ? '#D65A55' : '#CAD3DC'"
+          },
+          "strokeWidth": {"field": "edge_width"},
+          "opacity": {"value": 0.8},
+          "fill": {"value": null},
+          "path": {
+            "signal": "'M' + datum.source.x + ',' + datum.source.y + ' Q' + ((datum.source.x + datum.target.x) / 2 + 0.18 * (datum.target.y - datum.source.y)) + ',' + ((datum.source.y + datum.target.y) / 2 - 0.18 * (datum.target.x - datum.source.x)) + ' ' + datum.target.x + ',' + datum.target.y"
+          },
+          "tooltip": {
+            "signal": "{'Source': datum.source_account, 'Target': datum.target_account, 'Total amount': datum.edge_amount, 'Contains flagged transactions': datum.has_flagged > 0 ? 'Yes' : 'No'}"
+          }
+        }
+      }
+    },
+    {
+      "name": "arrowheads",
+      "type": "symbol",
+      "zindex": 0.5,
+      "interactive": false,
+      "from": {"data": "links"},
+      "encode": {
+        "update": {
+          "x": {
+            "signal": "datum.target.x - clamp((sqrt(datum.target.size / PI) + 5 + datum.edge_width) / max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)), 0.05, 0.45) * (datum.target.x - datum.source.x) + 0.36 * clamp((sqrt(datum.target.size / PI) + 5 + datum.edge_width) / max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)), 0.05, 0.45) * (1 - clamp((sqrt(datum.target.size / PI) + 5 + datum.edge_width) / max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)), 0.05, 0.45)) * (datum.target.y - datum.source.y)"
+          },
+          "y": {
+            "signal": "datum.target.y - clamp((sqrt(datum.target.size / PI) + 5 + datum.edge_width) / max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)), 0.05, 0.45) * (datum.target.y - datum.source.y) - 0.36 * clamp((sqrt(datum.target.size / PI) + 5 + datum.edge_width) / max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)), 0.05, 0.45) * (1 - clamp((sqrt(datum.target.size / PI) + 5 + datum.edge_width) / max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)), 0.05, 0.45)) * (datum.target.x - datum.source.x)"
+          },
+          "shape": {"value": "triangle-up"},
+          "size": {
+            "signal": "min(120, 20 * pow(datum.edge_width, 1.4))"
+          },
+          "angle": {
+            "signal": "atan2((datum.target.y - datum.source.y) + 0.36 * (1 - 2 * clamp((sqrt(datum.target.size / PI) + 5 + datum.edge_width) / max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)), 0.05, 0.45)) * (datum.target.x - datum.source.x), (datum.target.x - datum.source.x) - 0.36 * (1 - 2 * clamp((sqrt(datum.target.size / PI) + 5 + datum.edge_width) / max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)), 0.05, 0.45)) * (datum.target.y - datum.source.y)) * 180 / PI + 90"
+          },
+          "fill": {
+            "signal": "datum.has_flagged > 0 ? '#D65A55' : '#CAD3DC'"
+          },
+          "opacity": {"value": 0.95}
+        }
+      }
+    }
+  ]
+}

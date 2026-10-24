@@ -1,0 +1,275 @@
+-- ============================================================
+-- AMLNet v2 Raw Data Audit
+-- ============================================================
+-- Purpose:
+--   Profile the raw transaction table before staging/analysis.
+--   The audit focuses on table shape, completeness, categorical
+--   domains, duplicate records, numeric validity, entity coverage,
+--   fraud/AML labels, and the raw metadata representation.
+--
+-- Source:
+--   `amlnet.transactions_raw`
+--
+-- Important:
+--   In the original CSV, metadata is serialized as a Python-style
+--   dictionary string rather than valid JSON. The companion script
+--   `01_prepare_transactions_raw.py` repairs that serialization and
+--   performs metadata-specific completeness checks before reload.
+--
+-- The BigQuery dataset is stored in the EU multi-region.
+-- ============================================================
+
+SET @@location = 'EU';
+
+
+-- ============================================================
+-- 1. Table shape and candidate transaction grain
+-- ============================================================
+
+-- Establish the total number of raw transaction records.
+SELECT
+    COUNT(*) AS n_rows
+FROM `amlnet.transactions_raw`;
+
+
+-- ============================================================
+-- 2. Basic numeric checks
+-- ============================================================
+
+-- Inspect the observed range of the simulation step and amount
+-- before applying any transformations.
+
+SELECT
+    MIN(step) AS min_step,
+    MAX(step) AS max_step,
+    COUNT(DISTINCT step) AS n_steps,
+    MIN(amount) AS min_amount,
+    MAX(amount) AS max_amount,
+    AVG(amount) AS avg_amount
+FROM `amlnet.transactions_raw`;
+
+
+-- ============================================================
+-- 3. Missing values
+-- ============================================================
+
+-- Count SQL NULL values in every top-level AMLNet v2 source column.
+-- Metadata-internal missingness is audited separately in Python after
+-- the Python-style serialization has been parsed.
+
+SELECT
+    COUNTIF(step IS NULL) AS step_nulls,
+    COUNTIF(type IS NULL) AS type_nulls,
+    COUNTIF(amount IS NULL) AS amount_nulls,
+    COUNTIF(category IS NULL) AS category_nulls,
+    COUNTIF(nameOrig IS NULL) AS origin_nulls,
+    COUNTIF(nameDest IS NULL) AS destination_nulls,
+    COUNTIF(oldbalanceOrg IS NULL) AS origin_balance_before_nulls,
+    COUNTIF(newbalanceOrig IS NULL) AS origin_balance_after_nulls,
+    COUNTIF(isFraud IS NULL) AS fraud_nulls,
+    COUNTIF(isMoneyLaundering IS NULL) AS money_laundering_nulls,
+    COUNTIF(laundering_typology IS NULL) AS laundering_typology_nulls,
+    COUNTIF(metadata IS NULL) AS metadata_nulls,
+    COUNTIF(fraud_probability IS NULL) AS fraud_probability_nulls,
+    COUNTIF(hour IS NULL) AS hour_nulls,
+    COUNTIF(day_of_week IS NULL) AS day_of_week_nulls,
+    COUNTIF(day_of_month IS NULL) AS day_of_month_nulls,
+    COUNTIF(month IS NULL) AS month_nulls
+FROM `amlnet.transactions_raw`;
+
+
+-- ============================================================
+-- 4. Categorical domains
+-- ============================================================
+
+-- Inspect transaction-type frequencies.
+SELECT
+    type,
+    COUNT(*) AS n_transactions
+FROM `amlnet.transactions_raw`
+GROUP BY type
+ORDER BY n_transactions DESC;
+
+-- Inspect transaction-category frequencies.
+SELECT
+    category,
+    COUNT(*) AS n_transactions
+FROM `amlnet.transactions_raw`
+GROUP BY category
+ORDER BY n_transactions DESC;
+
+-- Confirm the observed fraud-label domain and class balance.
+SELECT
+    isFraud,
+    COUNT(*) AS n_transactions
+FROM `amlnet.transactions_raw`
+GROUP BY isFraud
+ORDER BY isFraud;
+
+-- Confirm the observed money-laundering-label domain and class balance.
+SELECT
+    isMoneyLaundering,
+    COUNT(*) AS n_transactions
+FROM `amlnet.transactions_raw`
+GROUP BY isMoneyLaundering
+ORDER BY isMoneyLaundering;
+
+-- Inspect the laundering typologies represented in the raw data.
+SELECT
+    laundering_typology,
+    COUNT(*) AS n_transactions
+FROM `amlnet.transactions_raw`
+GROUP BY laundering_typology
+ORDER BY n_transactions DESC;
+
+
+-- ============================================================
+-- 5. Exact duplicate rows
+-- ============================================================
+
+-- Compare the total row count with the number of distinct combinations
+-- across all 17 AMLNet v2 source fields. Equality indicates that the
+-- raw table contains no exact duplicate source records.
+WITH distinct_rows AS (
+    SELECT DISTINCT
+        step,
+        type,
+        amount,
+        category,
+        nameOrig,
+        nameDest,
+        oldbalanceOrg,
+        newbalanceOrig,
+        isFraud,
+        isMoneyLaundering,
+        laundering_typology,
+        metadata,
+        fraud_probability,
+        hour,
+        day_of_week,
+        day_of_month,
+        month
+    FROM `amlnet.transactions_raw`
+)
+
+SELECT
+    (SELECT COUNT(*) FROM `amlnet.transactions_raw`) AS n_rows,
+    COUNT(*) AS n_distinct_rows
+FROM distinct_rows;
+
+-- ============================================================
+-- 6. Numeric validity
+-- ============================================================
+
+-- Check for non-positive transaction amounts and inspect the range.
+SELECT
+    COUNTIF(amount < 0) AS negative_amounts,
+    COUNTIF(amount = 0) AS zero_amounts,
+    MIN(amount) AS min_amount,
+    MAX(amount) AS max_amount
+FROM `amlnet.transactions_raw`;
+
+-- Check whether the recorded origin balances ever become negative.
+SELECT
+    COUNTIF(oldbalanceOrg < 0) AS negative_origin_balance_before,
+    COUNTIF(newbalanceOrig < 0) AS negative_origin_balance_after
+FROM `amlnet.transactions_raw`;
+
+
+-- ============================================================
+-- 7. Balance consistency
+-- ============================================================
+
+-- Compare the change in the origin balance with the transaction amount.
+-- This is a descriptive diagnostic rather than a hard validity rule:
+-- the expected relationship may depend on transaction semantics.
+SELECT
+    type,
+    COUNT(*) AS n_transactions,
+    COUNTIF(
+        ABS(
+            (oldbalanceOrg - newbalanceOrig) - amount
+        ) < 0.01
+    ) AS origin_balance_matches_amount
+FROM `amlnet.transactions_raw`
+GROUP BY type
+ORDER BY n_transactions DESC;
+
+
+-- ============================================================
+-- 8. Origin and destination identifiers
+-- ============================================================
+
+-- Count the number of distinct entities observed on each side of a
+-- transaction.
+SELECT
+    COUNT(DISTINCT nameOrig) AS n_origins,
+    COUNT(DISTINCT nameDest) AS n_destinations
+FROM `amlnet.transactions_raw`;
+
+-- Count entities that appear at least once as both an origin and a
+-- destination. This describes network structure, not a data-quality
+-- problem by itself.
+
+WITH origins AS (
+    SELECT DISTINCT nameOrig AS entity_id
+    FROM `amlnet.transactions_raw`
+),
+destinations AS (
+    SELECT DISTINCT nameDest AS entity_id
+    FROM `amlnet.transactions_raw`
+)
+
+SELECT
+    COUNT(*) AS entities_in_both
+FROM origins
+INNER JOIN destinations
+USING (entity_id);
+
+
+-- ============================================================
+-- 9. Fraud and money-laundering labels
+-- ============================================================
+
+-- Measure fraud prevalence in the raw transaction table.
+SELECT
+    COUNT(*) AS n_transactions,
+    COUNTIF(isFraud = 1) AS n_fraud,
+    SAFE_DIVIDE(
+        COUNTIF(isFraud = 1),
+        COUNT(*)
+    ) AS fraud_rate
+FROM `amlnet.transactions_raw`;
+
+-- Cross-tabulate the two binary labels to determine how fraud and
+-- money-laundering annotations overlap.
+SELECT
+    isFraud,
+    isMoneyLaundering,
+    COUNT(*) AS n_transactions
+FROM `amlnet.transactions_raw`
+GROUP BY
+    isFraud,
+    isMoneyLaundering
+ORDER BY
+    isFraud,
+    isMoneyLaundering;
+
+
+-- ============================================================
+-- 10. Raw metadata representation
+-- ============================================================
+
+-- Inspect a small sample of non-null metadata values before parsing.
+SELECT
+    metadata
+FROM `amlnet.transactions_raw`
+WHERE metadata IS NOT NULL
+LIMIT 10;
+
+-- Finding:
+-- Metadata resembles a Python dictionary representation rather than
+-- valid JSON (for example, datetime.datetime(...), None, True/False,
+-- and single-quoted keys/values). The companion Python preprocessing
+-- script repairs this representation before reloading metadata as a
+-- native BigQuery JSON column.

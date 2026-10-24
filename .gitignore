@@ -1,3 +1,9 @@
+# Original datasets
+data/raw/
+
+# Large processed transaction data
+/data/processed/transactions_fixed.csv
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
