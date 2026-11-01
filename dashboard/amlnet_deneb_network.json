@@ -1,0 +1,1731 @@
+{
+  "$schema": "https://vega.github.io/schema/vega/v5.json",
+  "description": "AMLNet one-hop account network: shifted center, account and transaction-status legends, node and edge tooltips, flagged-involved account colors, pan/zoom, noncrossing parallel lanes and tapered directional edges. Edge and arrowhead tooltip hover enabled by restoring mark interactivity. v6: wide centerline hover overlay plus invisible point targets for edge tooltip picking; background-only drag preserved. v7: arrowheads moved forward closer to link ends. v8: Both enlarged Account and Transaction status legends are stacked at the bottom-left; account ID labels slightly enlarged. v9: network shifted slightly up/right; all legends hidden when no account is selected; empty-state instruction enlarged.",
+  "autosize": "none",
+  "padding": {
+    "left": 12,
+    "right": 12,
+    "top": 14,
+    "bottom": 12
+  },
+  "data": [
+    {
+      "name": "dataset"
+    },
+    {
+      "name": "focus_candidates",
+      "source": "dataset",
+      "transform": [
+        {
+          "type": "aggregate",
+          "groupby": [
+            "entity_id"
+          ],
+          "fields": [
+            "entity_id"
+          ],
+          "ops": [
+            "count"
+          ],
+          "as": [
+            "rows"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "normalized",
+      "source": "dataset",
+      "transform": [
+        {
+          "type": "filter",
+          "expr": "isValid(datum.source_id) && isValid(datum.target_id)"
+        },
+        {
+          "type": "filter",
+          "expr": "focusAccount !== '' && (toString(datum.source_id) === focusAccount || toString(datum.target_id) === focusAccount)"
+        },
+        {
+          "type": "formula",
+          "as": "source",
+          "expr": "toString(datum.source_id)"
+        },
+        {
+          "type": "formula",
+          "as": "target",
+          "expr": "toString(datum.target_id)"
+        },
+        {
+          "type": "formula",
+          "as": "flag_value",
+          "expr": "datum.flagged === true || datum.flagged === 1 || datum.flagged === 'True' || datum.flagged === 'TRUE' || datum.flagged === 'true' ? 1 : 0"
+        },
+        {
+          "type": "formula",
+          "as": "amount_value",
+          "expr": "isValid(datum['Sum of total_amount']) ? max(0, toNumber(datum['Sum of total_amount'])) : 0"
+        },
+        {
+          "type": "formula",
+          "as": "counterparty_ever_flagged",
+          "expr": "datum.flag_value === 1 || datum['Counterparty Ever Flagged'] === true || datum['Counterparty Ever Flagged'] === 1 || lower(toString(datum['Counterparty Ever Flagged'])) === 'true' || datum['Counterparty Ever Flagged'] === 'Flagged-involved' ? 1 : 0"
+        },
+        {
+          "type": "formula",
+          "as": "source_ever_flagged",
+          "expr": "datum.source === focusAccount ? 1 : datum.counterparty_ever_flagged"
+        },
+        {
+          "type": "formula",
+          "as": "target_ever_flagged",
+          "expr": "datum.target === focusAccount ? 1 : datum.counterparty_ever_flagged"
+        },
+        {
+          "type": "formula",
+          "as": "transaction_count_value",
+          "expr": "isValid(datum['Sum of transaction_count']) ? max(0, toNumber(datum['Sum of transaction_count'])) : isValid(datum['transaction_count']) ? max(0, toNumber(datum['transaction_count'])) : isValid(datum['Count of transaction_id']) ? max(0, toNumber(datum['Count of transaction_id'])) : 1"
+        }
+      ]
+    },
+    {
+      "name": "links",
+      "source": "normalized",
+      "transform": [
+        {
+          "type": "aggregate",
+          "groupby": [
+            "source",
+            "target",
+            "flag_value"
+          ],
+          "fields": [
+            "amount_value",
+            "amount_value",
+            "source_ever_flagged",
+            "target_ever_flagged",
+            "transaction_count_value"
+          ],
+          "ops": [
+            "sum",
+            "count",
+            "max",
+            "max",
+            "sum"
+          ],
+          "as": [
+            "edge_amount",
+            "source_rows",
+            "source_ever_flagged",
+            "target_ever_flagged",
+            "edge_transaction_count"
+          ]
+        },
+        {
+          "type": "formula",
+          "as": "source_account",
+          "expr": "datum.source"
+        },
+        {
+          "type": "formula",
+          "as": "target_account",
+          "expr": "datum.target"
+        },
+        {
+          "type": "formula",
+          "as": "status",
+          "expr": "datum.flag_value > 0 ? 'Flagged transactions' : 'Unflagged transactions'"
+        },
+        {
+          "type": "formula",
+          "as": "has_flagged",
+          "expr": "datum.flag_value"
+        },
+        {
+          "type": "formula",
+          "as": "pair_key",
+          "expr": "datum.source_account < datum.target_account ? datum.source_account + '|' + datum.target_account : datum.target_account + '|' + datum.source_account"
+        },
+        {
+          "type": "formula",
+          "as": "curve_coef",
+          "expr": "datum.flag_value > 0 ? 0.26 * curveStrength : 0.14 * curveStrength"
+        },
+        {
+          "type": "formula",
+          "as": "counterparty_id",
+          "expr": "datum.source_account === focusAccount ? datum.target_account : datum.source_account"
+        },
+        {
+          "type": "joinaggregate",
+          "groupby": [
+            "counterparty_id"
+          ],
+          "fields": [
+            "edge_amount"
+          ],
+          "ops": [
+            "count"
+          ],
+          "as": [
+            "counterparty_link_count"
+          ]
+        },
+        {
+          "type": "window",
+          "groupby": [
+            "counterparty_id"
+          ],
+          "sort": {
+            "field": [
+              "flag_value",
+              "source_account",
+              "target_account"
+            ],
+            "order": [
+              "descending",
+              "ascending",
+              "ascending"
+            ]
+          },
+          "ops": [
+            "row_number"
+          ],
+          "fields": [
+            null
+          ],
+          "as": [
+            "counterparty_link_rank"
+          ]
+        },
+        {
+          "type": "formula",
+          "as": "counterparty_slot",
+          "expr": "datum.counterparty_link_count <= 1 ? 0 : datum.counterparty_link_rank - (datum.counterparty_link_count + 1) / 2"
+        },
+        {
+          "type": "formula",
+          "as": "layout_link_strength",
+          "expr": "0.65 / max(1, datum.counterparty_link_count)"
+        },
+        {
+          "type": "formula",
+          "as": "link_distance",
+          "expr": "135 + 14 * ((parseInt(substring(datum.source_account, 1)) + parseInt(substring(datum.target_account, 1))) % 7)"
+        }
+      ]
+    },
+    {
+      "name": "endpoints",
+      "source": "links",
+      "transform": [
+        {
+          "type": "fold",
+          "fields": [
+            "source_account",
+            "target_account"
+          ],
+          "as": [
+            "role",
+            "id"
+          ]
+        },
+        {
+          "type": "formula",
+          "as": "ever_flagged",
+          "expr": "datum.role === 'source_account' ? datum.source_ever_flagged : datum.target_ever_flagged"
+        }
+      ]
+    },
+    {
+      "name": "nodes",
+      "source": "endpoints",
+      "transform": [
+        {
+          "type": "aggregate",
+          "groupby": [
+            "id"
+          ],
+          "fields": [
+            "edge_amount",
+            "edge_amount",
+            "ever_flagged",
+            "edge_transaction_count"
+          ],
+          "ops": [
+            "sum",
+            "count",
+            "max",
+            "sum"
+          ],
+          "as": [
+            "total_amount",
+            "connections",
+            "ever_flagged",
+            "transaction_count"
+          ]
+        },
+        {
+          "type": "formula",
+          "as": "angular_weight",
+          "expr": "datum.id === focusAccount ? 0 : 1 + 1.5 * min(2, max(0, datum.connections - 1))"
+        },
+        {
+          "type": "formula",
+          "as": "angle_group",
+          "expr": "datum.id === focusAccount ? -1 : (datum.connections > 1 ? 1 : 0)"
+        },
+        {
+          "type": "window",
+          "groupby": [
+            "angle_group"
+          ],
+          "sort": {
+            "field": "id",
+            "order": "ascending"
+          },
+          "ops": [
+            "row_number"
+          ],
+          "fields": [
+            null
+          ],
+          "as": [
+            "group_rank"
+          ]
+        },
+        {
+          "type": "joinaggregate",
+          "groupby": [
+            "angle_group"
+          ],
+          "fields": [
+            "id"
+          ],
+          "ops": [
+            "count"
+          ],
+          "as": [
+            "group_count"
+          ]
+        },
+        {
+          "type": "formula",
+          "as": "angular_slot",
+          "expr": "datum.angle_group === -1 ? -1 : (datum.group_rank - (datum.angle_group === 1 ? 0.5 : 0.2)) / max(1, datum.group_count)"
+        },
+        {
+          "type": "window",
+          "sort": {
+            "field": [
+              "angular_slot",
+              "id"
+            ],
+            "order": [
+              "ascending",
+              "ascending"
+            ]
+          },
+          "ops": [
+            "sum"
+          ],
+          "fields": [
+            "angular_weight"
+          ],
+          "as": [
+            "angular_running"
+          ],
+          "frame": [
+            null,
+            0
+          ],
+          "ignorePeers": true
+        },
+        {
+          "type": "joinaggregate",
+          "ops": [
+            "sum"
+          ],
+          "fields": [
+            "angular_weight"
+          ],
+          "as": [
+            "angular_total"
+          ]
+        },
+        {
+          "type": "formula",
+          "as": "preferred_angle",
+          "expr": "datum.id === focusAccount ? 0 : 2 * PI * (datum.angular_running - datum.angular_weight / 2) / max(1, datum.angular_total) - PI / 2"
+        },
+        {
+          "type": "formula",
+          "as": "preferred_x",
+          "expr": "datum.id === focusAccount ? width / 2 : width / 2 + min(width * 0.36, 310) * cos(datum.preferred_angle)"
+        },
+        {
+          "type": "formula",
+          "as": "preferred_y",
+          "expr": "datum.id === focusAccount ? height / 2 : height / 2 + min(height * 0.30, 140) * sin(datum.preferred_angle)"
+        }
+      ]
+    }
+  ],
+  "marks": [
+    {
+      "name": "pan_surface",
+      "type": "rect",
+      "zindex": -9,
+      "encode": {
+        "enter": {
+          "x": {
+            "value": 0
+          },
+          "y": {
+            "value": 0
+          },
+          "fill": {
+            "value": "#FFFFFF"
+          },
+          "fillOpacity": {
+            "value": 0.005
+          },
+          "cursor": {
+            "value": "grab"
+          }
+        },
+        "update": {
+          "width": {
+            "signal": "width"
+          },
+          "height": {
+            "signal": "height"
+          }
+        }
+      }
+    },
+    {
+      "name": "layout_nodes",
+      "type": "symbol",
+      "zindex": -3,
+      "from": {
+        "data": "nodes"
+      },
+      "encode": {
+        "enter": {
+          "fill": {
+            "value": "#4F81A8"
+          },
+          "stroke": {
+            "value": "#1F4E79"
+          },
+          "strokeWidth": {
+            "value": 2
+          }
+        },
+        "update": {
+          "size": {
+            "scale": "nodeArea",
+            "field": "total_amount"
+          },
+          "tooltip": {
+            "signal": "{'Account': datum.id, 'Total incoming + outgoing': format(datum.total_amount, ',.2f'), 'Transactions with central account': format(datum.transaction_count, ',.0f')}"
+          },
+          "opacity": {
+            "value": 0
+          }
+        }
+      },
+      "transform": [
+        {
+          "type": "force",
+          "static": true,
+          "iterations": 550,
+          "signal": "force",
+          "forces": [
+            {
+              "force": "center",
+              "x": {
+                "signal": "width / 2"
+              },
+              "y": {
+                "signal": "height / 2"
+              }
+            },
+            {
+              "force": "nbody",
+              "strength": -105
+            },
+            {
+              "force": "collide",
+              "radius": {
+                "expr": "sqrt(datum.size / PI) + 12"
+              },
+              "strength": 0.9,
+              "iterations": 2
+            },
+            {
+              "force": "x",
+              "x": "datum.preferred_x",
+              "strength": 0.5
+            },
+            {
+              "force": "y",
+              "y": "datum.preferred_y",
+              "strength": 0.5
+            },
+            {
+              "force": "link",
+              "links": "links",
+              "id": "datum.id",
+              "distance": {
+                "field": "link_distance"
+              },
+              "strength": {
+                "field": "layout_link_strength"
+              }
+            }
+          ]
+        }
+      ],
+      "interactive": false
+    },
+    {
+      "name": "edges",
+      "type": "path",
+      "zindex": 0,
+      "from": {
+        "data": "links"
+      },
+      "encode": {
+        "update": {
+          "stroke": {
+            "value": null
+          },
+          "opacity": {
+            "value": 0.86
+          },
+          "fill": {
+            "scale": "edgeColor",
+            "field": "status"
+          },
+          "path": {
+            "signal": "'M' + (((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.25*(scale('edgeWidth', datum.edge_amount))))) - width/2) * zoomLevel + width/2 + pan[0])) + ',' + (((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.25*(scale('edgeWidth', datum.edge_amount))))) - height/2) * zoomLevel + height/2 + pan[1])) + ' C' + (((((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.67 + ((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.33 + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.64*(scale('edgeWidth', datum.edge_amount))))) - width/2) * zoomLevel + width/2 + pan[0])) + ',' + (((((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.67 + ((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.33 + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.64*(scale('edgeWidth', datum.edge_amount))))) - height/2) * zoomLevel + height/2 + pan[1])) + ' ' + (((((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.33 + ((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.67 + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.64*(scale('edgeWidth', datum.edge_amount))))) - width/2) * zoomLevel + width/2 + pan[0])) + ',' + (((((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.33 + ((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.67 + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.64*(scale('edgeWidth', datum.edge_amount))))) - height/2) * zoomLevel + height/2 + pan[1])) + ' ' + (((((((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.20*(scale('edgeWidth', datum.edge_amount))))) - width/2) * zoomLevel + width/2 + pan[0])) + ',' + (((((((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.20*(scale('edgeWidth', datum.edge_amount))))) - height/2) * zoomLevel + height/2 + pan[1])) + ' L' + (((((((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (-0.20*(scale('edgeWidth', datum.edge_amount))))) - width/2) * zoomLevel + width/2 + pan[0])) + ',' + (((((((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (-0.20*(scale('edgeWidth', datum.edge_amount))))) - height/2) * zoomLevel + height/2 + pan[1])) + ' C' + (((((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.33 + ((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.67 + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (-0.64*(scale('edgeWidth', datum.edge_amount))))) - width/2) * zoomLevel + width/2 + pan[0])) + ',' + (((((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.33 + ((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.67 + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (-0.64*(scale('edgeWidth', datum.edge_amount))))) - height/2) * zoomLevel + height/2 + pan[1])) + ' ' + (((((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.67 + ((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.33 + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (-0.64*(scale('edgeWidth', datum.edge_amount))))) - width/2) * zoomLevel + width/2 + pan[0])) + ',' + (((((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.67 + ((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.33 + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (-0.64*(scale('edgeWidth', datum.edge_amount))))) - height/2) * zoomLevel + height/2 + pan[1])) + ' ' + (((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (-0.25*(scale('edgeWidth', datum.edge_amount))))) - width/2) * zoomLevel + width/2 + pan[0])) + ',' + (((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (-0.25*(scale('edgeWidth', datum.edge_amount))))) - height/2) * zoomLevel + height/2 + pan[1])) + ' Z'"
+          },
+          "tooltip": {
+            "signal": "{'Direction from central account': datum.source_account === focusAccount ? 'Outgoing' : 'Incoming', 'Total amount': format(datum.edge_amount, ',.2f'), 'Flagged': datum.flag_value > 0 ? 'Yes' : 'No'}"
+          },
+          "cursor": {
+            "value": "help"
+          }
+        }
+      },
+      "interactive": true
+    },
+    {
+      "name": "arrowheads",
+      "type": "symbol",
+      "zindex": 1,
+      "interactive": true,
+      "from": {
+        "data": "links"
+      },
+      "encode": {
+        "update": {
+          "x": {
+            "signal": "((((((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) - ((0.22 * sqrt(min(160, max(28, 18 * pow((scale('edgeWidth', datum.edge_amount)), 1.14)))))) * ((((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) - ((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.33 + ((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.67 + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))))) / (max(1, hypot(((((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) - ((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.33 + ((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.67 + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))))), ((((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) - ((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.33 + ((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.67 + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12))))))))))) - width/2) * zoomLevel + width/2 + pan[0])"
+          },
+          "y": {
+            "signal": "((((((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) - ((0.22 * sqrt(min(160, max(28, 18 * pow((scale('edgeWidth', datum.edge_amount)), 1.14)))))) * ((((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) - ((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.33 + ((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.67 + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))))) / (max(1, hypot(((((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) - ((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.33 + ((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.67 + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))))), ((((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) - ((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.33 + ((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.67 + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12))))))))))) - height/2) * zoomLevel + height/2 + pan[1])"
+          },
+          "shape": {
+            "value": "triangle-up"
+          },
+          "size": {
+            "signal": "(min(160, max(28, 18 * pow((scale('edgeWidth', datum.edge_amount)), 1.14)))) * zoomLevel * zoomLevel"
+          },
+          "angle": {
+            "signal": "atan2(((((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) - ((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.33 + ((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.67 + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))))), ((((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) - ((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.33 + ((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.67 + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12))))))) * 180 / PI + 90"
+          },
+          "fill": {
+            "scale": "edgeColor",
+            "field": "status"
+          },
+          "opacity": {
+            "value": 0.98
+          },
+          "tooltip": {
+            "signal": "{'Direction from central account': datum.source_account === focusAccount ? 'Outgoing' : 'Incoming', 'Total amount': format(datum.edge_amount, ',.2f'), 'Flagged': datum.flag_value > 0 ? 'Yes' : 'No'}"
+          },
+          "cursor": {
+            "value": "help"
+          }
+        }
+      }
+    },
+    {
+      "name": "edge_hover_targets",
+      "type": "path",
+      "interactive": true,
+      "zindex": 1.3,
+      "from": {
+        "data": "links"
+      },
+      "encode": {
+        "update": {
+          "path": {
+            "signal": "'M' + (((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.25*(0)))) - width/2) * zoomLevel + width/2 + pan[0])) + ',' + (((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.25*(0)))) - height/2) * zoomLevel + height/2 + pan[1])) + ' C' + (((((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.67 + ((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.33 + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.64*(0)))) - width/2) * zoomLevel + width/2 + pan[0])) + ',' + (((((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.67 + ((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.33 + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.64*(0)))) - height/2) * zoomLevel + height/2 + pan[1])) + ' ' + (((((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.33 + ((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.67 + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.64*(0)))) - width/2) * zoomLevel + width/2 + pan[0])) + ',' + (((((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.33 + ((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.67 + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.64*(0)))) - height/2) * zoomLevel + height/2 + pan[1])) + ' ' + (((((((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.20*(0)))) - width/2) * zoomLevel + width/2 + pan[0])) + ',' + (((((((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.20*(0)))) - height/2) * zoomLevel + height/2 + pan[1]))"
+          },
+          "fill": {
+            "value": null
+          },
+          "stroke": {
+            "value": "#FFFFFF"
+          },
+          "strokeOpacity": {
+            "value": 0.015
+          },
+          "strokeWidth": {
+            "signal": "max(16, (12 + scale('edgeWidth', datum.edge_amount)) * zoomLevel)"
+          },
+          "strokeCap": {
+            "value": "round"
+          },
+          "cursor": {
+            "value": "help"
+          },
+          "tooltip": {
+            "signal": "{'Direction from central account': datum.source_account === focusAccount ? 'Outgoing' : 'Incoming', 'Total amount': format(datum.edge_amount, ',.2f'), 'Flagged': datum.flag_value > 0 ? 'Yes' : 'No'}"
+          }
+        }
+      }
+    },
+    {
+      "name": "edge_hover_quarter",
+      "type": "symbol",
+      "interactive": true,
+      "zindex": 1.4,
+      "from": {
+        "data": "links"
+      },
+      "encode": {
+        "update": {
+          "x": {
+            "signal": "(0.421875) * ((((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.25*(0)))) - width/2) * zoomLevel + width/2 + pan[0]))) + (0.421875) * ((((((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.67 + ((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.33 + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.64*(0)))) - width/2) * zoomLevel + width/2 + pan[0]))) + (0.140625) * ((((((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.33 + ((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.67 + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.64*(0)))) - width/2) * zoomLevel + width/2 + pan[0]))) + (0.015625) * ((((((((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.20*(0)))) - width/2) * zoomLevel + width/2 + pan[0])))"
+          },
+          "y": {
+            "signal": "(0.421875) * ((((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.25*(0)))) - height/2) * zoomLevel + height/2 + pan[1]))) + (0.421875) * ((((((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.67 + ((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.33 + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.64*(0)))) - height/2) * zoomLevel + height/2 + pan[1]))) + (0.140625) * ((((((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.33 + ((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.67 + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.64*(0)))) - height/2) * zoomLevel + height/2 + pan[1]))) + (0.015625) * ((((((((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.20*(0)))) - height/2) * zoomLevel + height/2 + pan[1])))"
+          },
+          "shape": {
+            "value": "circle"
+          },
+          "size": {
+            "signal": "PI * pow(max(8, 8 * zoomLevel), 2)"
+          },
+          "fill": {
+            "value": "#FFFFFF"
+          },
+          "fillOpacity": {
+            "value": 0.015
+          },
+          "stroke": {
+            "value": null
+          },
+          "cursor": {
+            "value": "help"
+          },
+          "tooltip": {
+            "signal": "{'Direction from central account': datum.source_account === focusAccount ? 'Outgoing' : 'Incoming', 'Total amount': format(datum.edge_amount, ',.2f'), 'Flagged': datum.flag_value > 0 ? 'Yes' : 'No'}"
+          }
+        }
+      }
+    },
+    {
+      "name": "edge_hover_middle",
+      "type": "symbol",
+      "interactive": true,
+      "zindex": 1.4,
+      "from": {
+        "data": "links"
+      },
+      "encode": {
+        "update": {
+          "x": {
+            "signal": "(0.125000) * ((((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.25*(0)))) - width/2) * zoomLevel + width/2 + pan[0]))) + (0.375000) * ((((((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.67 + ((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.33 + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.64*(0)))) - width/2) * zoomLevel + width/2 + pan[0]))) + (0.375000) * ((((((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.33 + ((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.67 + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.64*(0)))) - width/2) * zoomLevel + width/2 + pan[0]))) + (0.125000) * ((((((((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.20*(0)))) - width/2) * zoomLevel + width/2 + pan[0])))"
+          },
+          "y": {
+            "signal": "(0.125000) * ((((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.25*(0)))) - height/2) * zoomLevel + height/2 + pan[1]))) + (0.375000) * ((((((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.67 + ((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.33 + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.64*(0)))) - height/2) * zoomLevel + height/2 + pan[1]))) + (0.375000) * ((((((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.33 + ((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.67 + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.64*(0)))) - height/2) * zoomLevel + height/2 + pan[1]))) + (0.125000) * ((((((((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.20*(0)))) - height/2) * zoomLevel + height/2 + pan[1])))"
+          },
+          "shape": {
+            "value": "circle"
+          },
+          "size": {
+            "signal": "PI * pow(max(8, 8 * zoomLevel), 2)"
+          },
+          "fill": {
+            "value": "#FFFFFF"
+          },
+          "fillOpacity": {
+            "value": 0.015
+          },
+          "stroke": {
+            "value": null
+          },
+          "cursor": {
+            "value": "help"
+          },
+          "tooltip": {
+            "signal": "{'Direction from central account': datum.source_account === focusAccount ? 'Outgoing' : 'Incoming', 'Total amount': format(datum.edge_amount, ',.2f'), 'Flagged': datum.flag_value > 0 ? 'Yes' : 'No'}"
+          }
+        }
+      }
+    },
+    {
+      "name": "edge_hover_three_quarters",
+      "type": "symbol",
+      "interactive": true,
+      "zindex": 1.4,
+      "from": {
+        "data": "links"
+      },
+      "encode": {
+        "update": {
+          "x": {
+            "signal": "(0.015625) * ((((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.25*(0)))) - width/2) * zoomLevel + width/2 + pan[0]))) + (0.140625) * ((((((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.67 + ((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.33 + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.64*(0)))) - width/2) * zoomLevel + width/2 + pan[0]))) + (0.421875) * ((((((((((datum.source.x + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.33 + ((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) * 0.67 + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.64*(0)))) - width/2) * zoomLevel + width/2 + pan[0]))) + (0.421875) * ((((((((datum.target.x + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))))) + ((-(((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * (0.20*(0)))) - width/2) * zoomLevel + width/2 + pan[0])))"
+          },
+          "y": {
+            "signal": "(0.015625) * ((((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.25*(0)))) - height/2) * zoomLevel + height/2 + pan[1]))) + (0.140625) * ((((((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.67 + ((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.33 + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.64*(0)))) - height/2) * zoomLevel + height/2 + pan[1]))) + (0.421875) * ((((((((((datum.source.y + (datum.source_account === focusAccount ? 1 : -1) * ((sqrt(datum.source.size / PI) + (datum.source_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.33 + ((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) * 0.67 + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * ((min(7, 0.028 * (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y)))) + ((datum.counterparty_slot * 13)) * 0.12)))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.64*(0)))) - height/2) * zoomLevel + height/2 + pan[1]))) + (0.421875) * ((((((((datum.target.y + (datum.target_account === focusAccount ? 1 : -1) * ((sqrt(datum.target.size / PI) + (datum.target_account === focusAccount ? 24 : 6))) * (((datum.source_account === focusAccount ? (datum.target.y - datum.source.y) : (datum.source.y - datum.target.y)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) + ((datum.counterparty_slot * 13)) * (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))))) + (((datum.source_account === focusAccount ? (datum.target.x - datum.source.x) : (datum.source.x - datum.target.x)) / (max(1, hypot(datum.target.x - datum.source.x, datum.target.y - datum.source.y))))) * (0.20*(0)))) - height/2) * zoomLevel + height/2 + pan[1])))"
+          },
+          "shape": {
+            "value": "circle"
+          },
+          "size": {
+            "signal": "PI * pow(max(8, 8 * zoomLevel), 2)"
+          },
+          "fill": {
+            "value": "#FFFFFF"
+          },
+          "fillOpacity": {
+            "value": 0.015
+          },
+          "stroke": {
+            "value": null
+          },
+          "cursor": {
+            "value": "help"
+          },
+          "tooltip": {
+            "signal": "{'Direction from central account': datum.source_account === focusAccount ? 'Outgoing' : 'Incoming', 'Total amount': format(datum.edge_amount, ',.2f'), 'Flagged': datum.flag_value > 0 ? 'Yes' : 'No'}"
+          }
+        }
+      }
+    },
+    {
+      "name": "focus_ring",
+      "type": "symbol",
+      "zindex": 1.8,
+      "interactive": false,
+      "from": {
+        "data": "layout_nodes"
+      },
+      "encode": {
+        "enter": {
+          "shape": {
+            "value": "circle"
+          },
+          "fill": {
+            "value": null
+          },
+          "stroke": {
+            "value": "#C75B56"
+          },
+          "strokeWidth": {
+            "value": 4
+          },
+          "strokeDash": {
+            "value": [
+              7,
+              4
+            ]
+          }
+        },
+        "update": {
+          "x": {
+            "signal": "(((datum.x) - width / 2) * zoomLevel + width / 2 + pan[0])"
+          },
+          "y": {
+            "signal": "(((datum.y) - height / 2) * zoomLevel + height / 2 + pan[1])"
+          },
+          "size": {
+            "signal": "PI * pow((sqrt(datum.size / PI) + 16) * zoomLevel, 2)"
+          },
+          "opacity": {
+            "signal": "datum.datum.id === focusAccount ? 0.95 : 0"
+          }
+        }
+      }
+    },
+    {
+      "name": "focus_label_box",
+      "type": "rect",
+      "zindex": 2.6,
+      "interactive": false,
+      "from": {
+        "data": "layout_nodes"
+      },
+      "encode": {
+        "enter": {
+          "fill": {
+            "value": "#F5F7FA"
+          },
+          "stroke": {
+            "value": "#D9E1E8"
+          },
+          "strokeWidth": {
+            "value": 1
+          }
+        },
+        "update": {
+          "x": {
+            "signal": "(((datum.x) - width / 2) * zoomLevel + width / 2 + pan[0]) - max(62, length(toString(datum.datum.id)) * 8 + 20) / 2"
+          },
+          "x2": {
+            "signal": "(((datum.x) - width / 2) * zoomLevel + width / 2 + pan[0]) + max(62, length(toString(datum.datum.id)) * 8 + 20) / 2"
+          },
+          "y": {
+            "signal": "(((datum.y) - height / 2) * zoomLevel + height / 2 + pan[1]) + sqrt(datum.size / PI) * zoomLevel + 10"
+          },
+          "y2": {
+            "signal": "(((datum.y) - height / 2) * zoomLevel + height / 2 + pan[1]) + sqrt(datum.size / PI) * zoomLevel + 32"
+          },
+          "opacity": {
+            "signal": "datum.datum.id === focusAccount ? 0.96 : 0"
+          }
+        }
+      }
+    },
+    {
+      "name": "focus_label_text",
+      "type": "text",
+      "zindex": 3.1,
+      "interactive": false,
+      "from": {
+        "data": "layout_nodes"
+      },
+      "encode": {
+        "enter": {
+          "font": {
+            "value": "Segoe UI"
+          },
+          "fontSize": {
+            "value": 12
+          },
+          "fontWeight": {
+            "value": 700
+          },
+          "fill": {
+            "value": "#273445"
+          },
+          "text": {
+            "field": "datum.id"
+          }
+        },
+        "update": {
+          "x": {
+            "signal": "(((datum.x) - width / 2) * zoomLevel + width / 2 + pan[0])"
+          },
+          "y": {
+            "signal": "(((datum.y) - height / 2) * zoomLevel + height / 2 + pan[1]) + sqrt(datum.size / PI) * zoomLevel + 21"
+          },
+          "align": {
+            "value": "center"
+          },
+          "baseline": {
+            "value": "middle"
+          },
+          "opacity": {
+            "signal": "datum.datum.id === focusAccount ? 1 : 0"
+          }
+        }
+      }
+    },
+    {
+      "name": "node_labels",
+      "type": "text",
+      "zindex": 3,
+      "from": {
+        "data": "layout_nodes"
+      },
+      "interactive": false,
+      "encode": {
+        "enter": {
+          "text": {
+            "field": "datum.id"
+          },
+          "font": {
+            "value": "Segoe UI"
+          },
+          "fontSize": {
+            "value": 12.5
+          },
+          "fontWeight": {
+            "value": 600
+          },
+          "fill": {
+            "value": "#273445"
+          }
+        },
+        "update": {
+          "x": {
+            "signal": "(((datum.x) - width / 2) * zoomLevel + width / 2 + pan[0]) + (datum.x < width / 2 ? -1 : 1) * (sqrt(datum.size / PI) * zoomLevel + 10)"
+          },
+          "y": {
+            "signal": "(((datum.y) - height / 2) * zoomLevel + height / 2 + pan[1])"
+          },
+          "align": {
+            "signal": "datum.x < width / 2 ? 'right' : 'left'"
+          },
+          "baseline": {
+            "value": "middle"
+          },
+          "opacity": {
+            "signal": "datum.datum.id === focusAccount ? 0 : 1"
+          }
+        }
+      }
+    },
+    {
+      "name": "empty_state_title",
+      "type": "text",
+      "zindex": 6,
+      "interactive": false,
+      "encode": {
+        "update": {
+          "x": {
+            "signal": "width / 2"
+          },
+          "y": {
+            "signal": "height / 2 - 22"
+          },
+          "text": {
+            "signal": "focusAccount === '' ? 'Select an account to explore its network' : 'No connections to display'"
+          },
+          "font": {
+            "value": "Segoe UI"
+          },
+          "fontSize": {
+            "value": 20
+          },
+          "fontWeight": {
+            "value": "bold"
+          },
+          "fill": {
+            "value": "#1F4E79"
+          },
+          "align": {
+            "value": "center"
+          },
+          "baseline": {
+            "value": "middle"
+          },
+          "opacity": {
+            "signal": "length(data('nodes')) === 0 ? 1 : 0"
+          }
+        }
+      }
+    },
+    {
+      "name": "empty_state_instruction",
+      "type": "text",
+      "zindex": 6,
+      "interactive": false,
+      "encode": {
+        "update": {
+          "x": {
+            "signal": "width / 2"
+          },
+          "y": {
+            "signal": "height / 2 + 18"
+          },
+          "text": {
+            "signal": "focusAccount === '' ? 'Use Account ID or select an account in Explore Activity.' : 'Choose another account or adjust your filters.'"
+          },
+          "font": {
+            "value": "Segoe UI"
+          },
+          "fontSize": {
+            "value": 15
+          },
+          "fill": {
+            "value": "#356A95"
+          },
+          "align": {
+            "value": "center"
+          },
+          "baseline": {
+            "value": "middle"
+          },
+          "opacity": {
+            "signal": "length(data('nodes')) === 0 ? 1 : 0"
+          },
+          "fontWeight": {
+            "value": 600
+          }
+        }
+      }
+    },
+    {
+      "name": "node_marks",
+      "type": "symbol",
+      "zindex": 2,
+      "from": {
+        "data": "layout_nodes"
+      },
+      "encode": {
+        "enter": {
+          "fill": {
+            "value": "#4F81A8"
+          }
+        },
+        "update": {
+          "x": {
+            "signal": "(((datum.x) - width / 2) * zoomLevel + width / 2 + pan[0])"
+          },
+          "y": {
+            "signal": "(((datum.y) - height / 2) * zoomLevel + height / 2 + pan[1])"
+          },
+          "size": {
+            "signal": "datum.size * zoomLevel * zoomLevel"
+          },
+          "strokeWidth": {
+            "signal": "(datum.datum.ever_flagged > 0 ? 3.2 : 2) * zoomLevel"
+          },
+          "tooltip": {
+            "signal": "{'Account': datum.datum.id, 'Total incoming + outgoing': format(datum.datum.total_amount, ',.2f'), 'Transactions with central account': format(datum.datum.transaction_count, ',.0f')}"
+          },
+          "stroke": {
+            "signal": "datum.datum.ever_flagged > 0 ? '#D5655C' : '#1F4E79'"
+          },
+          "fill": {
+            "signal": "datum.datum.ever_flagged > 0 ? '#E9A8A1' : '#4F81A8'"
+          }
+        }
+      }
+    },
+    {
+      "name": "zoom_in_button",
+      "type": "group",
+      "zindex": 20,
+      "encode": {
+        "enter": {
+          "width": {
+            "value": 30
+          },
+          "height": {
+            "value": 30
+          },
+          "fill": {
+            "value": "#F5F7FA"
+          },
+          "stroke": {
+            "value": "#AFC6D9"
+          },
+          "cornerRadius": {
+            "value": 6
+          },
+          "cursor": {
+            "value": "pointer"
+          },
+          "tooltip": {
+            "value": "Zoom in"
+          }
+        },
+        "update": {
+          "x": {
+            "signal": "width - 43"
+          },
+          "y": {
+            "value": 12
+          }
+        }
+      },
+      "marks": [
+        {
+          "type": "text",
+          "interactive": false,
+          "encode": {
+            "enter": {
+              "x": {
+                "value": 15
+              },
+              "y": {
+                "value": 15
+              },
+              "align": {
+                "value": "center"
+              },
+              "baseline": {
+                "value": "middle"
+              },
+              "font": {
+                "value": "Segoe UI"
+              },
+              "fontSize": {
+                "value": 19
+              },
+              "fontWeight": {
+                "value": 600
+              },
+              "fill": {
+                "value": "#1F4E79"
+              },
+              "text": {
+                "value": "+"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "zoom_out_button",
+      "type": "group",
+      "zindex": 20,
+      "encode": {
+        "enter": {
+          "width": {
+            "value": 30
+          },
+          "height": {
+            "value": 30
+          },
+          "fill": {
+            "value": "#F5F7FA"
+          },
+          "stroke": {
+            "value": "#AFC6D9"
+          },
+          "cornerRadius": {
+            "value": 6
+          },
+          "cursor": {
+            "value": "pointer"
+          },
+          "tooltip": {
+            "value": "Zoom out"
+          }
+        },
+        "update": {
+          "x": {
+            "signal": "width - 43"
+          },
+          "y": {
+            "value": 48
+          }
+        }
+      },
+      "marks": [
+        {
+          "type": "text",
+          "interactive": false,
+          "encode": {
+            "enter": {
+              "x": {
+                "value": 15
+              },
+              "y": {
+                "value": 15
+              },
+              "align": {
+                "value": "center"
+              },
+              "baseline": {
+                "value": "middle"
+              },
+              "font": {
+                "value": "Segoe UI"
+              },
+              "fontSize": {
+                "value": 19
+              },
+              "fontWeight": {
+                "value": 600
+              },
+              "fill": {
+                "value": "#1F4E79"
+              },
+              "text": {
+                "value": "−"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "reset_view_button",
+      "type": "group",
+      "zindex": 20,
+      "encode": {
+        "enter": {
+          "width": {
+            "value": 30
+          },
+          "height": {
+            "value": 30
+          },
+          "fill": {
+            "value": "#F5F7FA"
+          },
+          "stroke": {
+            "value": "#AFC6D9"
+          },
+          "cornerRadius": {
+            "value": 6
+          },
+          "cursor": {
+            "value": "pointer"
+          },
+          "tooltip": {
+            "value": "Reset zoom and position"
+          }
+        },
+        "update": {
+          "x": {
+            "signal": "width - 43"
+          },
+          "y": {
+            "value": 84
+          }
+        }
+      },
+      "marks": [
+        {
+          "type": "text",
+          "interactive": false,
+          "encode": {
+            "enter": {
+              "x": {
+                "value": 15
+              },
+              "y": {
+                "value": 15
+              },
+              "align": {
+                "value": "center"
+              },
+              "baseline": {
+                "value": "middle"
+              },
+              "font": {
+                "value": "Segoe UI"
+              },
+              "fontSize": {
+                "value": 17
+              },
+              "fontWeight": {
+                "value": 600
+              },
+              "fill": {
+                "value": "#1F4E79"
+              },
+              "text": {
+                "value": "⟳"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "node_history_legend_title",
+      "type": "text",
+      "zindex": 14,
+      "interactive": false,
+      "encode": {
+        "enter": {
+          "text": {
+            "value": "Account"
+          },
+          "font": {
+            "value": "Segoe UI"
+          },
+          "fontSize": {
+            "value": 15
+          },
+          "fontWeight": {
+            "value": "bold"
+          },
+          "fill": {
+            "value": "#273445"
+          },
+          "align": {
+            "value": "left"
+          },
+          "baseline": {
+            "value": "middle"
+          }
+        },
+        "update": {
+          "x": {
+            "value": 26
+          },
+          "y": {
+            "signal": "height - 185"
+          },
+          "opacity": {
+            "signal": "focusAccount !== '' && length(data('nodes')) > 0 ? 1 : 0"
+          }
+        }
+      }
+    },
+    {
+      "name": "node_history_legend_symbol_0",
+      "type": "symbol",
+      "zindex": 14,
+      "interactive": false,
+      "encode": {
+        "enter": {
+          "shape": {
+            "value": "circle"
+          },
+          "size": {
+            "value": 230
+          },
+          "fill": {
+            "value": "#E7B1AC"
+          },
+          "stroke": {
+            "value": "#D86A63"
+          },
+          "strokeWidth": {
+            "value": 3.0
+          }
+        },
+        "update": {
+          "x": {
+            "value": 30
+          },
+          "y": {
+            "signal": "height - 158"
+          },
+          "opacity": {
+            "signal": "focusAccount !== '' && length(data('nodes')) > 0 ? 1 : 0"
+          }
+        }
+      }
+    },
+    {
+      "name": "node_history_legend_label_0",
+      "type": "text",
+      "zindex": 14,
+      "interactive": false,
+      "encode": {
+        "enter": {
+          "text": {
+            "value": "Flagged-involved account"
+          },
+          "font": {
+            "value": "Segoe UI"
+          },
+          "fontSize": {
+            "value": 13
+          },
+          "fill": {
+            "value": "#273445"
+          },
+          "align": {
+            "value": "left"
+          },
+          "baseline": {
+            "value": "middle"
+          }
+        },
+        "update": {
+          "x": {
+            "value": 52
+          },
+          "y": {
+            "signal": "height - 158"
+          },
+          "opacity": {
+            "signal": "focusAccount !== '' && length(data('nodes')) > 0 ? 1 : 0"
+          }
+        }
+      }
+    },
+    {
+      "name": "node_history_legend_symbol_1",
+      "type": "symbol",
+      "zindex": 14,
+      "interactive": false,
+      "encode": {
+        "enter": {
+          "shape": {
+            "value": "circle"
+          },
+          "size": {
+            "value": 230
+          },
+          "fill": {
+            "value": "#4F81A8"
+          },
+          "stroke": {
+            "value": "#1F4E79"
+          },
+          "strokeWidth": {
+            "value": 3.0
+          }
+        },
+        "update": {
+          "x": {
+            "value": 30
+          },
+          "y": {
+            "signal": "height - 130"
+          },
+          "opacity": {
+            "signal": "focusAccount !== '' && length(data('nodes')) > 0 ? 1 : 0"
+          }
+        }
+      }
+    },
+    {
+      "name": "node_history_legend_label_1",
+      "type": "text",
+      "zindex": 14,
+      "interactive": false,
+      "encode": {
+        "enter": {
+          "text": {
+            "value": "Other account"
+          },
+          "font": {
+            "value": "Segoe UI"
+          },
+          "fontSize": {
+            "value": 13
+          },
+          "fill": {
+            "value": "#273445"
+          },
+          "align": {
+            "value": "left"
+          },
+          "baseline": {
+            "value": "middle"
+          }
+        },
+        "update": {
+          "x": {
+            "value": 52
+          },
+          "y": {
+            "signal": "height - 130"
+          },
+          "opacity": {
+            "signal": "focusAccount !== '' && length(data('nodes')) > 0 ? 1 : 0"
+          }
+        }
+      }
+    },
+    {
+      "name": "transaction_status_legend_title",
+      "type": "text",
+      "zindex": 14,
+      "interactive": false,
+      "encode": {
+        "enter": {
+          "text": {
+            "value": "Transaction status"
+          },
+          "font": {
+            "value": "Segoe UI"
+          },
+          "fontSize": {
+            "value": 15
+          },
+          "fontWeight": {
+            "value": "bold"
+          },
+          "fill": {
+            "value": "#273445"
+          },
+          "align": {
+            "value": "left"
+          },
+          "baseline": {
+            "value": "middle"
+          }
+        },
+        "update": {
+          "x": {
+            "value": 26
+          },
+          "y": {
+            "signal": "height - 93"
+          },
+          "opacity": {
+            "signal": "focusAccount !== '' && length(data('nodes')) > 0 ? 1 : 0"
+          }
+        }
+      }
+    },
+    {
+      "name": "transaction_status_legend_unflagged_line",
+      "type": "rule",
+      "zindex": 14,
+      "interactive": false,
+      "encode": {
+        "enter": {
+          "stroke": {
+            "value": "#AFC6D9"
+          },
+          "strokeWidth": {
+            "value": 5
+          }
+        },
+        "update": {
+          "x": {
+            "value": 25
+          },
+          "x2": {
+            "value": 49
+          },
+          "y": {
+            "signal": "height - 65"
+          },
+          "opacity": {
+            "signal": "focusAccount !== '' && length(data('nodes')) > 0 ? 1 : 0"
+          }
+        }
+      }
+    },
+    {
+      "name": "transaction_status_legend_unflagged_label",
+      "type": "text",
+      "zindex": 14,
+      "interactive": false,
+      "encode": {
+        "enter": {
+          "text": {
+            "value": "Unflagged transactions"
+          },
+          "font": {
+            "value": "Segoe UI"
+          },
+          "fontSize": {
+            "value": 13
+          },
+          "fill": {
+            "value": "#273445"
+          },
+          "align": {
+            "value": "left"
+          },
+          "baseline": {
+            "value": "middle"
+          }
+        },
+        "update": {
+          "x": {
+            "value": 58
+          },
+          "y": {
+            "signal": "height - 65"
+          },
+          "opacity": {
+            "signal": "focusAccount !== '' && length(data('nodes')) > 0 ? 1 : 0"
+          }
+        }
+      }
+    },
+    {
+      "name": "transaction_status_legend_flagged_line",
+      "type": "rule",
+      "zindex": 14,
+      "interactive": false,
+      "encode": {
+        "enter": {
+          "stroke": {
+            "value": "#C75B56"
+          },
+          "strokeWidth": {
+            "value": 5
+          }
+        },
+        "update": {
+          "x": {
+            "value": 25
+          },
+          "x2": {
+            "value": 49
+          },
+          "y": {
+            "signal": "height - 37"
+          },
+          "opacity": {
+            "signal": "focusAccount !== '' && length(data('nodes')) > 0 ? 1 : 0"
+          }
+        }
+      }
+    },
+    {
+      "name": "transaction_status_legend_flagged_label",
+      "type": "text",
+      "zindex": 14,
+      "interactive": false,
+      "encode": {
+        "enter": {
+          "text": {
+            "value": "Flagged transactions"
+          },
+          "font": {
+            "value": "Segoe UI"
+          },
+          "fontSize": {
+            "value": 13
+          },
+          "fill": {
+            "value": "#273445"
+          },
+          "align": {
+            "value": "left"
+          },
+          "baseline": {
+            "value": "middle"
+          }
+        },
+        "update": {
+          "x": {
+            "value": 58
+          },
+          "y": {
+            "signal": "height - 37"
+          },
+          "opacity": {
+            "signal": "focusAccount !== '' && length(data('nodes')) > 0 ? 1 : 0"
+          }
+        }
+      }
+    }
+  ],
+  "background": "#FFFFFF",
+  "signals": [
+    {
+      "name": "focusAccount",
+      "update": "length(data('focus_candidates')) === 1 && isValid(data('focus_candidates')[0].entity_id) ? toString(data('focus_candidates')[0].entity_id) : ''"
+    },
+    {
+      "name": "curveStrength",
+      "value": 1.0
+    },
+    {
+      "name": "pan",
+      "value": [
+        78,
+        -18
+      ],
+      "on": [
+        {
+          "events": "[@pan_surface:mousedown, window:mouseup] > window:mousemove!",
+          "update": "dragAnchor ? [x() - dragAnchor[0], y() - dragAnchor[1]] : pan"
+        },
+        {
+          "events": "@reset_view_button:click",
+          "update": "[78,-18]"
+        },
+        {
+          "events": {
+            "signal": "focusAccount"
+          },
+          "update": "[78,-18]"
+        }
+      ]
+    },
+    {
+      "name": "dragAnchor",
+      "value": null,
+      "on": [
+        {
+          "events": "@pan_surface:mousedown",
+          "update": "[x() - pan[0], y() - pan[1]]"
+        },
+        {
+          "events": "window:mouseup",
+          "update": "null"
+        }
+      ]
+    },
+    {
+      "name": "zoomLevel",
+      "value": 1,
+      "on": [
+        {
+          "events": "wheel!",
+          "update": "clamp(zoomLevel * pow(1.001, -event.deltaY), 0.7, 3)"
+        },
+        {
+          "events": "@zoom_in_button:click",
+          "update": "min(3, zoomLevel * 1.25)"
+        },
+        {
+          "events": "@zoom_out_button:click",
+          "update": "max(0.7, zoomLevel / 1.25)"
+        },
+        {
+          "events": "@reset_view_button:click",
+          "update": "1"
+        },
+        {
+          "events": {
+            "signal": "focusAccount"
+          },
+          "update": "1"
+        }
+      ]
+    }
+  ],
+  "scales": [
+    {
+      "name": "edgeColor",
+      "type": "ordinal",
+      "domain": [
+        "Unflagged transactions",
+        "Flagged transactions"
+      ],
+      "range": [
+        "#AFC6D9",
+        "#C75B56"
+      ]
+    },
+    {
+      "name": "edgeWidth",
+      "type": "sqrt",
+      "domain": {
+        "data": "links",
+        "field": "edge_amount"
+      },
+      "range": [
+        1.4,
+        9.0
+      ],
+      "zero": false,
+      "clamp": true
+    },
+    {
+      "name": "nodeArea",
+      "type": "sqrt",
+      "domain": {
+        "data": "nodes",
+        "field": "total_amount"
+      },
+      "range": [
+        220,
+        2000
+      ],
+      "zero": false,
+      "clamp": true
+    }
+  ],
+  "legends": []
+}
