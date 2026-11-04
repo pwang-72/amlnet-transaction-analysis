@@ -14,7 +14,7 @@ This workflow supports routine transaction monitoring and focused investigations
 
 ### Transaction Overview 
 
-[![*Screenshot: Transaction Overview*](dashboard/previews/Transaction Overview.png)](https://app.powerbi.com/view?r=eyJrIjoiMDc1ZjIzMGUtMzI1YS00YzZmLTgwNmItMTk5NmIyNWI1N2Y3IiwidCI6IjE2ZGVlZGU4LTc5ZTktNGUzMy05OWU2LTlkOGQzOTQyZDc5NiIsImMiOjEwfQ==&pageName=0712ee85a3d537763fc4)
+[![*Screenshot: Transaction Overview*](<dashboard/previews/Transaction Overview.png>)](https://app.powerbi.com/view?r=eyJrIjoiMDc1ZjIzMGUtMzI1YS00YzZmLTgwNmItMTk5NmIyNWI1N2Y3IiwidCI6IjE2ZGVlZGU4LTc5ZTktNGUzMy05OWU2LTlkOGQzOTQyZDc5NiIsImMiOjEwfQ==&pageName=0712ee85a3d537763fc4)
 
 *Click to open the interactive Power BI report.*
 
@@ -22,7 +22,7 @@ The dashboard supports interactive exploration of transaction activity across ti
 
 ### Flagged Transactions & Account Connections
 
-[![*Screenshot: Flagged Transactions & Account Connections*](dashboard/previews/Flagged Transactions & Account Connections.png)](https://app.powerbi.com/view?r=eyJrIjoiMDc1ZjIzMGUtMzI1YS00YzZmLTgwNmItMTk5NmIyNWI1N2Y3IiwidCI6IjE2ZGVlZGU4LTc5ZTktNGUzMy05OWU2LTlkOGQzOTQyZDc5NiIsImMiOjEwfQ==&pageName=591ea54f0bce5fb5d77d)
+[![*Screenshot: Flagged Transactions & Account Connections*](<dashboard/previews/Flagged Transactions & Account Connections.png>)](https://app.powerbi.com/view?r=eyJrIjoiMDc1ZjIzMGUtMzI1YS00YzZmLTgwNmItMTk5NmIyNWI1N2Y3IiwidCI6IjE2ZGVlZGU4LTc5ZTktNGUzMy05OWU2LTlkOGQzOTQyZDc5NiIsImMiOjEwfQ==&pageName=591ea54f0bce5fb5d77d)
 
 *Click to open the interactive Power BI report.*
 
