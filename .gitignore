@@ -1,5 +1,5 @@
-# Original datasets
-data/raw/
+# Raw AMLNet v2 dataset (download separately; see data/raw/README.md)
+/data/raw/transactions.csv
 
 # Large processed transaction data
 /data/processed/transactions_fixed.csv
