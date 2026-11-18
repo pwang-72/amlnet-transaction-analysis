@@ -1,0 +1,11 @@
+# Local replay inputs, output batches, and logs
+/data/
+/incoming/
+/processed/
+/logs/
+
+# Credentials and generated files
+.env
+.env.*
+__pycache__/
+*.pyc

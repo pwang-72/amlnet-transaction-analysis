@@ -1,0 +1,16 @@
+FUNCTION Main_copy GLOBAL
+    SET PythonExe TO $'''C:\\PATH_TO\\anaconda3\\envs\\amlnet\\python.exe'''
+    Display.SelectFolder Description: $'''Select the AMLNet Automation project folder''' InitialDirectory: $'''C:\\PATH_TO\\AMLNet_Automation''' IsTopMost: False SelectedFolder=> SelectedFolder ButtonPressed=> ButtonPressed2
+    LOOP LoopIndex FROM 1 TO 20 STEP 1
+        Folder.GetFiles Folder: $'''%SelectedFolder%\\incoming''' FileFilter: $'''replay_batch_*.csv''' IncludeSubfolders: False FailOnAccessDenied: True SortBy1: Folder.SortBy.Name SortDescending1: False SortBy2: Folder.SortBy.NoSort SortDescending2: False SortBy3: Folder.SortBy.NoSort SortDescending3: False Files=> Files
+        LOOP FOREACH CurrentItem IN Files
+            Scripting.RunDOSCommand.RunDOSCommandAndFailOnTimeout DOSCommandOrApplication: $'''%PythonExe% \"%SelectedFolder%\\ingest_batch.py\" --file \"%CurrentItem.FullName%\" --sync-cases''' Timeout: 300 StandardOutput=> CommandOutput StandardError=> CommandErrorOutput ExitCode=> CommandExitCode
+            IF CommandExitCode = 0 THEN
+                File.Move Files: CurrentItem.FullName Destination: $'''%SelectedFolder%\\processed''' IfFileExists: File.IfExists.Overwrite MovedFiles=> MovedFiles
+            ELSE
+                Display.ShowMessageDialog.ShowMessage Message: CommandErrorOutput Icon: Display.Icon.None Buttons: Display.Buttons.OK DefaultButton: Display.DefaultButton.Button1 IsTopMost: False ButtonPressed=> ButtonPressed4
+            END
+        END
+        WAIT 5
+    END
+END FUNCTION

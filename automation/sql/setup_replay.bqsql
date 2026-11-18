@@ -1,0 +1,67 @@
+-- Run once using a BigQuery project with the cleaned amlnet.transactions table.
+-- Set the BigQuery processing location to EU.
+CREATE SCHEMA IF NOT EXISTS `amlnet_replay` OPTIONS(location='EU');
+
+-- Materialize only the schema; leave replay rows empty.
+-- CTAS deliberately avoids retaining the original identity-column behavior.
+CREATE TABLE IF NOT EXISTS `amlnet_replay.transactions` AS
+SELECT * FROM `amlnet.transactions` WHERE FALSE;
+
+-- Replay version of the published AMLNet account-network SQL.
+-- Source: script/04_build_flagged_account_network_edges.bqsql in the original repo.
+-- The original grouping, account selection and edge-direction logic is retained.
+-- A VIEW recalculates the network from transactions ingested so far.
+
+CREATE OR REPLACE VIEW `amlnet_replay.flagged_account_connections` AS
+WITH `flagged accounts` AS (
+    SELECT origin_id AS entity_id
+    FROM `amlnet_replay.transactions`
+    WHERE label_is_fraud OR label_is_money_laundering
+
+    UNION DISTINCT
+
+    SELECT destination_id
+    FROM `amlnet_replay.transactions`
+    WHERE label_is_fraud OR label_is_money_laundering
+),
+entity_transactions AS (
+    SELECT
+        entity_id,
+        counterpart_id,
+        SUM(amount) AS total_amount,
+        transaction_role,
+        flagged
+    FROM (
+        SELECT
+            origin_id AS entity_id,
+            destination_id AS counterpart_id,
+            amount,
+            'origin' AS transaction_role,
+            label_is_fraud OR label_is_money_laundering AS flagged
+        FROM `amlnet_replay.transactions`
+        WHERE origin_id IN (SELECT entity_id FROM `flagged accounts`)
+
+        UNION ALL
+
+        SELECT
+            destination_id AS entity_id,
+            origin_id AS counterpart_id,
+            amount,
+            'destination' AS transaction_role,
+            label_is_fraud OR label_is_money_laundering AS flagged
+        FROM `amlnet_replay.transactions`
+        WHERE destination_id IN (SELECT entity_id FROM `flagged accounts`)
+    )
+    GROUP BY entity_id, counterpart_id, transaction_role, flagged
+)
+SELECT
+    *,
+    CASE
+        WHEN transaction_role = 'origin' THEN entity_id
+        ELSE counterpart_id
+    END AS source_id,
+    CASE
+        WHEN transaction_role = 'destination' THEN entity_id
+        ELSE counterpart_id
+    END AS target_id
+FROM entity_transactions;
