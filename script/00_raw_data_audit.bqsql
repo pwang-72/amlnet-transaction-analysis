@@ -13,7 +13,7 @@
 -- Important:
 --   In the original CSV, metadata is serialized as a Python-style
 --   dictionary string rather than valid JSON. The companion script
---   `01_prepare_transactions_raw.py` repairs that serialization and
+--   `01_prepare_transactions.py` repairs that serialization and
 --   performs metadata-specific completeness checks before reload.
 --
 -- The BigQuery dataset is stored in the EU multi-region.
