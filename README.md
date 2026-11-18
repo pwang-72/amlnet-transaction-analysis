@@ -8,7 +8,8 @@ Data-quality assessments were performed before defining the dashboard's analytic
 
 This workflow supports routine transaction monitoring and focused investigations, providing a reusable analytical interface that could also incorporate the outputs of automated fraud detection, anomaly detection, or risk-scoring systems.
 
-[Interactive Dashboard](#1-interactive-dashboard) · [Data Quality Assessment & Analytical Decisions](#2-data-quality-assessment--analytical-decisions) · [Data Workflow & Reproduction](#3-data-workflow--reproduction) [Optional extension — Transaction Replay & Investigation Automation](#4-optional-extension-—-transaction-replay-investigation-automation)
+[Interactive Dashboard](#1-interactive-dashboard) · [Data Quality Assessment & Analytical Decisions](#2-data-quality-assessment--analytical-decisions) · [Data Workflow & Reproduction](#3-data-workflow--reproduction) 
+[Automation Extension](#automation-extension)
 
 ## 1. Interactive Dashboard
 
@@ -151,6 +152,7 @@ Finally, execute `04_build_flagged_account_network_edges.bqsql` to create the ac
 
 Open `amlnet.pbix` in Power BI Desktop. The report already includes its data model, Power Query transformations, measures, visualizations, and interactions. If the Deneb network does not render, install or update Deneb from Power BI AppSource. Update the BigQuery connection credentials and project references as needed, then refresh the data. Verify that both report pages and their interactions work correctly.
 
-## 4. Optional extension — Transaction Replay & Investigation Automation
+<a id="automation-extension"></a>
+## 4. Optional extension — [Transaction Replay & Investigation Automation](automation/README.md)
 
-A separate automation extension demonstrates incremental transaction ingestion and investigation-case management using Python, Power Automate, BigQuery, Dataverse, and Power Apps. It reuses the existing transaction model while keeping the original analytical dashboard independent.
+A separate [automation extension](automation/README.md) demonstrates incremental transaction ingestion and investigation-case management using Python, Power Automate, BigQuery, Dataverse, and Power Apps. It reuses the existing transaction model while keeping the original analytical dashboard independent.
