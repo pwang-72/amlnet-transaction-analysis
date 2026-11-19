@@ -4,7 +4,7 @@ An extension of the [AMLNet transaction analysis](../README.md), using the **alr
 
 ## Workflow
 
-[automation workflow](workflow.svg)
+[automation workflow](automationw_flow.svg)
 
 For each ingested batch, `ingest_batch.py` also sends its original fraud/money-laundering-labelled records to `Power Automate Cloud (HTTP) → Dataverse → Power Apps`.
 
@@ -19,6 +19,8 @@ automation/
 ├── replay_transactions.py       # Emit timestamp-ordered CSV batches
 ├── ingest_batch.py              # BigQuery MERGE + flagged-case HTTP delivery
 ├── sql/setup_replay.bqsql       # Replay table and account-network view
+├─ dashboard/
+│  └─ amlnet_replay.pbix
 ├── power-platform/
 │   ├── AMLNet_Batch_Processing.txt       # Exported PAD actions (portable paths)
 │   └── AMLNetInvestigation_1_0_0_2.zip # Unmanaged solution: app, table, flow
