@@ -4,7 +4,7 @@ An extension of the [AMLNet transaction analysis](../README.md), using the **alr
 
 ## Workflow
 
-[automation workflow](automation_flow.svg)
+![automation workflow](automation_flow.svg)
 
 For each ingested batch, `ingest_batch.py` also sends its original fraud/money-laundering-labelled records to `Power Automate Cloud (HTTP) → Dataverse → Power Apps`.
 
