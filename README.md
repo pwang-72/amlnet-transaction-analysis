@@ -8,7 +8,7 @@ Data-quality assessments were performed before defining the dashboard's analytic
 
 This workflow supports routine transaction monitoring and focused investigations, providing a reusable analytical interface that could also incorporate the outputs of automated fraud detection, anomaly detection, or risk-scoring systems.
 
-[Interactive Dashboard](#1-interactive-dashboard) · [Data Quality Assessment & Analytical Decisions](#2-data-quality-assessment--analytical-decisions) · [Data Workflow & Reproduction](#3-data-workflow--reproduction) 
+[Interactive Dashboard](#1-interactive-dashboard) · [Data Quality Assessment & Analytical Decisions](#2-data-quality-assessment--analytical-decisions) · [Data Workflow & Reproduction](#3-data-workflow--reproduction) ·  
 [Automation Extension](#automation-extension)
 
 ## 1. Interactive Dashboard
